@@ -23,7 +23,7 @@ var Engine = (function(global) {
         win = global.window,
         canvas = doc.createElement('canvas'),
         ctx = canvas.getContext('2d'),
-        lastTime;
+        lastTime, gameStart, gameDuration;
 
     canvas.width = 505;
     canvas.height = 606;
@@ -41,6 +41,7 @@ var Engine = (function(global) {
          */
         var now = Date.now(),
             dt = (now - lastTime) / 1000.0;
+        gameDuration = Math.floor((now - gameStart) / 1000.0);
 
         /* Call our update/render functions, pass along the time delta to
          * our update function since it may be used for smooth animation.
@@ -91,6 +92,10 @@ var Engine = (function(global) {
      * render methods.
      */
     function updateEntities(dt) {
+        //console.log(gameDuration);
+        if (gameDuration % 2 === 0) {
+            allEnemies.push(new Enemy());
+        }
         allEnemies.forEach(function(enemy) {
             enemy.update(dt);
         });
@@ -160,7 +165,7 @@ var Engine = (function(global) {
      * those sorts of things. It's only called once by the init() method.
      */
     function reset() {
-        // noop
+        gameStart = Date.now();
     }
 
     /* Go ahead and load all of the images we know we're going to need to
