@@ -1,7 +1,11 @@
 Arcade Game
 ===============================
 
-Welcome to the Arcade Game main page. You will find the description of the game down below.
+Welcome to the Arcade Game main page. You will find the description of the game down below along with the instructions how to run the game.
+
+Running the Game
+----------------
+In order to run the game, you need to click on `index.html` and that will open up your browser and you can play the arcade game. You can also visit my github webapge and get the latest version of game. (https://github.com/peter-krajcir/arcade-game)
 
 The Game
 --------
