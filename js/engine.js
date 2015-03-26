@@ -15,6 +15,7 @@
  */
 
 var Engine = (function(global) {
+    "use strict";
     /* Predefine the variables we'll be using within this scope,
      * create the canvas element, grab the 2D context for that canvas
      * set the canvas elements height/width and add it to the DOM.
@@ -23,7 +24,10 @@ var Engine = (function(global) {
         win = global.window,
         canvas = doc.createElement('canvas'),
         ctx = canvas.getContext('2d'),
-        lastTime, gameStart, gameDuration;
+        nextSpawn = 1,
+        statusMessage = '',
+        statusMessageDuration = 3000,
+        statusMessageStart, lastSpawn, lastTime, gameStart, gameDuration, requestId;
 
     canvas.width = 505;
     canvas.height = 606;
@@ -41,12 +45,18 @@ var Engine = (function(global) {
          */
         var now = Date.now(),
             dt = (now - lastTime) / 1000.0;
-        gameDuration = Math.floor((now - gameStart) / 1000.0);
+        gameDuration = (now - gameStart) / 1000.0;
+
 
         /* Call our update/render functions, pass along the time delta to
          * our update function since it may be used for smooth animation.
          */
         update(dt);
+
+        if (player.won || player.lost) {
+            reset();
+        }
+
         render();
 
         /* Set our lastTime variable which is used to determine the time delta
@@ -57,8 +67,50 @@ var Engine = (function(global) {
         /* Use the browser's requestAnimationFrame function to call this
          * function again as soon as the browser is able to draw another frame.
          */
-        win.requestAnimationFrame(main);
-    };
+        requestId = win.requestAnimationFrame(main);
+        if (player.lifes === 0) {
+            if (requestId) {
+                win.cancelAnimationFrame(requestId);
+                requestId = undefined;
+            }
+        }
+    }
+
+    /* This function creates a visible message in the middle of the screen for certain amount
+     * of time, if you specify duration, it overwrites the default value
+    */
+
+    function setMessage(msg, duration) {
+        statusMessage = msg;
+        statusMessageStart = Date.now();
+        if (duration !== undefined) {
+            statusMessageDuration = duration;
+        }
+    }
+
+    /* This function is a clean-up function that removes the enemies off-screen
+     * It's called every second
+    */
+
+    function removeEntities() {
+        var i = allEnemies.length;
+        while (i--) {
+            if (allEnemies[i].x > 606) {
+                allEnemies.splice(i, 1);
+            }
+        }
+        setTimeout(removeEntities, 1000);
+    }
+
+    function generateObstackles() {
+        var obsCount = 3;
+        for (var i=0;i<obsCount;i++) {
+            var obstackle = new Obstackle();
+            obstackle.y = 4;
+            obstackle.x = Math.floor((Math.random()*5));
+            allObstackles.push(obstackle);
+        }
+    }
 
     /* This function does some initial setup that should only occur once,
      * particularly setting the lastTime variable that is required for the
@@ -67,6 +119,11 @@ var Engine = (function(global) {
     function init() {
         reset();
         lastTime = Date.now();
+        lastSpawn = 0;
+        nextSpawn = Math.random()*3000;
+        setMessage('Start!', 2000);
+        setTimeout(removeEntities, 1000);
+        generateObstackles();
         main();
     }
 
@@ -81,7 +138,34 @@ var Engine = (function(global) {
      */
     function update(dt) {
         updateEntities(dt);
-        // checkCollisions();
+        checkCollisions();
+    }
+
+    /* This function is called by main and takes care of status messages,
+     * specifically the information about the player status - the game has
+     * started, the player either won or lost
+    */
+    function updateStatusMessage() {
+        if (statusMessage !== '') {
+            if (statusMessageStart + statusMessageDuration >= Date.now()) {
+                displayStatusMessage();
+            } else {
+                statusMessage = '';
+            }
+        }
+    }
+
+    /* This function is called by updateStatusMessage() function and outputs
+     * the content of the variable statusMessage on the context
+    */
+    function displayStatusMessage() {
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.font = '48px sans-serif';
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'black';
+        ctx.fillText(statusMessage, canvas.width/2, canvas.height/2);
+        ctx.strokeText(statusMessage, canvas.width/2, canvas.height/2);
     }
 
     /* This is called by the update function  and loops through all of the
@@ -92,14 +176,53 @@ var Engine = (function(global) {
      * render methods.
      */
     function updateEntities(dt) {
-        //console.log(gameDuration);
-        if (gameDuration % 2 === 0) {
-            allEnemies.push(new Enemy());
+        if (lastSpawn + nextSpawn < Date.now()) {
+            // add an enemy and generate when should next enemy spawn
+            var enemy = new Enemy();
+            // randomly pick the path (1-3)
+            enemy.y = Math.floor((Math.random()*3)+1);
+            // randomly set the speed (200-500)
+            enemy.speed = Math.random()*300+200;
+            allEnemies.push(enemy);
+            // randomly pick when next enemy should spawn (0-3000ms)
+            nextSpawn = Math.random()*2000;
+            lastSpawn = Date.now();
         }
+
         allEnemies.forEach(function(enemy) {
             enemy.update(dt);
         });
         player.update();
+    }
+
+    function drawLifes() {
+        if (player.lifes > 0) {
+            for(var i=0;i<player.lifes;i++) {
+                ctx.drawImage(Resources.get('images/Heart.png'), 80+25*i, 47, 25, 42);
+            }
+        }
+    }
+
+    /* This function is called by the render function and displays the current
+     * game duration in the top right corner
+    */
+    function renderPermanentText() {
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'black';
+        var text = 'Time: '+Math.floor(gameDuration, 2);
+        ctx.fillText(text, canvas.width-10, 70);
+        ctx.strokeText(text, canvas.width-10, 70);
+        text = 'Won: '+player.wins;
+        ctx.fillText(text, canvas.width-10, 100);
+        ctx.strokeText(text, canvas.width-10, 100);
+        ctx.textAlign = 'left';
+        text = 'Lifes:';
+        drawLifes();
+        ctx.fillText(text, 10, 70);
+        ctx.strokeText(text, 10, 70);
     }
 
     /* This function initially draws the "game level", it will then call
@@ -141,8 +264,9 @@ var Engine = (function(global) {
             }
         }
 
-
         renderEntities();
+        renderPermanentText();
+        updateStatusMessage();
     }
 
     /* This function is called by the render function and is called on each game
@@ -157,7 +281,20 @@ var Engine = (function(global) {
             enemy.render();
         });
 
+        allObstackles.forEach(function(obstackle) {
+            obstackle.render();
+        });
+
         player.render();
+    }
+
+    function checkCollisions() {
+        allEnemies.forEach(function(enemy) {
+            if (enemy.x >= player.realX()-70 && enemy.x <= player.realX()+70 &&
+                enemy.y === player.y) {
+                player.lost = true;
+            }
+        });
     }
 
     /* This function does nothing but it could have been a good place to
@@ -165,7 +302,28 @@ var Engine = (function(global) {
      * those sorts of things. It's only called once by the init() method.
      */
     function reset() {
+        if (player.won) {
+            setMessage('You won!', 2000);
+            player.wins++;
+        }
+        if (player.lost) {
+            player.lifes--;
+            if (player.lifes === 0) {
+                setMessage('GAME OVER', 2000);
+            } else {
+                setMessage('You lost!', 2000);
+            }
+        }
+        player.x = 2;
+        player.y = 5;
+        player.won = false;
+        player.lost = false;
         gameStart = Date.now();
+        lastSpawn = 0;
+        nextSpawn = Math.random()*3000;
+        allEnemies = [];
+        allObstackles = [];
+        generateObstackles();
     }
 
     /* Go ahead and load all of the images we know we're going to need to
@@ -177,7 +335,9 @@ var Engine = (function(global) {
         'images/water-block.png',
         'images/grass-block.png',
         'images/enemy-bug.png',
-        'images/char-boy.png'
+        'images/char-boy.png',
+        'images/Heart.png',
+        'images/Rock.png'
     ]);
     Resources.onReady(init);
 
